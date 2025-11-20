@@ -1,0 +1,71 @@
+%% U3
+
+% parametrar
+D  = 1;          % värmeledningskoefficient
+T  = 0.01;       % slut-tid
+N  = 100;        % antal delintervall i x
+M  = 1000;       % antal tidssteg (dt = T/M = 1e-5)
+
+dx = 1/N;
+dt = T/M;
+
+x  = linspace(0, 1, N+1)';      % x_0 = 0,  x_N = 1
+t  = linspace(0, T, M+1);       % t_0 = 0,  t_M = T
+
+% funktioner f, randvillkor och begynnelsevillkor
+f_fun  = @(x, t) 0;             % f(x,t) = 0
+TL_fun = @(t) 0;                % u(0,t) = 0
+TR_fun = @(t) 0;                % u(1,t) = 0
+u0_fun = @(x) sin(5*pi*x);      % u(x,0) = sin(5*pi*x)
+
+% initialdata vid t = 0
+u = zeros(N+1, 1);
+for j = 1:(N+1)
+    u(j) = u0_fun(x(j));
+end
+u(1)   = TL_fun(0);
+u(end) = TR_fun(0);
+
+% enkel stabilitetskontroll
+r = D*dt/(dx^2);
+if r > 0.5
+    warning('D*dt/dx^2 = %f > 1/2, schemat kan vara instabilt.', r)
+end
+
+% tidsstepping med Euler framåt (explicit)
+for n = 1:M
+    t_n   = t(n);
+    t_np1 = t(n+1);
+
+    % randvillkor vid tiden t_n
+    u(1)   = TL_fun(t_n);
+    u(end) = TR_fun(t_n);
+
+    u_new = u;
+
+    % inre punkter j = 2,...,N
+    for j = 2:N
+        lap = u(j+1) - 2*u(j) + u(j-1);    % andraderivata med central differens
+        u_new(j) = u(j) + dt*( D*lap/(dx^2) + f_fun(x(j), t_n) );
+    end
+
+    % randvillkor vid tiden t_{n+1}
+    u_new(1)   = TL_fun(t_np1);
+    u_new(end) = TR_fun(t_np1);
+
+    u = u_new;
+end
+
+% analytisk lösning
+% för f=0, D=1, u0(x)=sin(5*pi*x)
+u_exact = exp(-(5*pi)^2 * D * T) * sin(5*pi*x);
+
+% fel vid tiden T
+err = u - u_exact;
+
+figure
+plot(x, err)
+xlabel('x')
+ylabel('u_{num} - u_{exact}')
+title('U3(c): fel vid T = 0.01')
+grid on
