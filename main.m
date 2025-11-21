@@ -37,7 +37,7 @@ for k = 1:8
     err_right(k)   = abs(d_right   - true_du);
 end
 
-figure; 
+figure(1); 
 hold on;
 
 loglog(1./hs, err_central)
@@ -56,18 +56,20 @@ title('Error vs O(h^2')
 
 %% U2
 
-N = 5;
+N = 400;
 h = (2*pi)/N;
-d = 1;
+d = 5;
 f = @(x) d*cos(2*x);
+u = @(x) (delta-(d/12))*cos(4*x) + (gamma/4)*sin(4*x) + (d/12)*cos(2*x);
 H = 1/(h^2);
+x = linspace(0, 2*pi, N)';
 
 A = zeros(N, N);
 b = zeros(N, 1);
 q = zeros(N, 1);
 
-gamma = 0;
-delta = 0;
+gamma = 1;
+delta = 1;
 
 
 
@@ -88,12 +90,18 @@ A(1, 1) = -1;
 A(1, 2) = 1;
 
 % adding randvilkor to q
-q(1) = q(1) - gamma*h;
+q(1) = q(1) + gamma*h;
 q(N) = q(N) - delta*H;
 
 
 % Lös ekvationssystemet A*w = q -> w = A\q
 w = A\q;
 
+figure(2)
+hold on
+plot(x, w)
+plot(x, u(x))
 
+figure(3)
+plot(x, w-u(x))
 
