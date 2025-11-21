@@ -181,3 +181,193 @@ for n = 1:M
     U(2:N, n+1) = w;
 end
 end
+
+
+%% U3
+
+% parametrar
+D  = 1;          % värmeledningskoefficient
+T  = 0.01;       % slut-tid
+N  = 100;        % antal delintervall i x
+M  = 1000;       % antal tidssteg (dt = T/M = 1e-5)
+
+dx = 1/N;
+dt = T/M;
+
+x  = linspace(0, 1, N+1)';      % x_0 = 0,  x_N = 1
+t  = linspace(0, T, M+1);       % t_0 = 0,  t_M = T
+
+% funktioner f, randvillkor och begynnelsevillkor
+f_fun  = @(x, t) 0;             % f(x,t) = 0
+TL_fun = @(t) 0;                % u(0,t) = 0
+TR_fun = @(t) 0;                % u(1,t) = 0
+u0_fun = @(x) sin(5*pi*x);      % u(x,0) = sin(5*pi*x)
+
+% initialdata vid t = 0
+u = zeros(N+1, 1);
+for j = 1:(N+1)
+    u(j) = u0_fun(x(j));
+end
+u(1)   = TL_fun(0);
+u(end) = TR_fun(0);
+
+% enkel stabilitetskontroll
+r = D*dt/(dx^2);
+if r > 0.5
+    warning('D*dt/dx^2 = %f > 1/2, schemat kan vara instabilt.', r)
+end
+
+% tidsstepping med Euler framåt (explicit)
+for n = 1:M
+    t_n   = t(n);
+    t_np1 = t(n+1);
+
+    % randvillkor vid tiden t_n
+    u(1)   = TL_fun(t_n);
+    u(end) = TR_fun(t_n);
+
+    u_new = u;
+
+    % inre punkter j = 2,...,N
+    for j = 2:N
+        lap = u(j+1) - 2*u(j) + u(j-1);    % andraderivata med central differens
+        u_new(j) = u(j) + dt*( D*lap/(dx^2) + f_fun(x(j), t_n) );
+    end
+
+    % randvillkor vid tiden t_{n+1}
+    u_new(1)   = TL_fun(t_np1);
+    u_new(end) = TR_fun(t_np1);
+
+    u = u_new;
+end
+
+% analytisk lösning
+% för f=0, D=1, u0(x)=sin(5*pi*x)
+u_exact = exp(-(5*pi)^2 * D * T) * sin(5*pi*x);
+
+% fel vid tiden T
+err = u - u_exact;
+
+figure
+plot(x, err)
+xlabel('x')
+ylabel('u_{num} - u_{exact}')
+title('U3(c): fel vid T = 0.01')
+grid on
+
+%% U4c
+
+% Exakta funktioner enligt (18)–(19)
+uanafcn  = @(x,t) sin(exp(t) .* x);
+uinitfcn = @(x)   uanafcn(x, 0);
+ffcn     = @(x,t) exp(t) .* x .* cos(exp(t) .* x) + exp(2*t) .* sin(exp(t) .* x);
+TLfcn    = @(t)   0;
+TRfcn    = @(t)   sin(exp(t));
+
+D = 1;
+T = 0.1;
+N = 100;
+M = 100;          
+
+[x, t, U] = crankNicolson1D(D, ffcn, TLfcn, TRfcn, uinitfcn, T, N, M);
+
+% analytisk lösning vid T
+u_exact = uanafcn(x, T);
+
+err = U(:, end) - u_exact;
+
+fprintf('Maxfel vid T = %.3f: %.3e\n', T, max(abs(err)));
+
+figure
+plot(x, err)
+xlabel('x')
+ylabel('U_{num} - u_{exact}')
+title('U4(c): fel vid T = 0.1')
+grid on
+
+
+%% U4(e) – konvergensstudie
+
+uanafcn  = @(x,t) sin(exp(t).*x);
+uinitfcn = @(x)   uanafcn(x,0);
+ffcn     = @(x,t) exp(t).*x.*cos(exp(t).*x) + exp(2*t).*sin(exp(t).*x);
+TLfcn    = @(t)   0;
+TRfcn    = @(t)   sin(exp(t));
+
+D  = 1;
+T  = 1;                        
+Ns = [25 50 100 200 400];      
+
+errs  = zeros(size(Ns));
+dxs   = zeros(size(Ns));
+dts   = zeros(size(Ns));
+
+c_dt = 0.2;                   
+
+for k = 1:length(Ns)
+    N  = Ns(k);
+    dx = 1/N;
+    dxs(k) = dx;
+    
+    dt_guess = c_dt * dx;
+    M  = round(T / dt_guess);  
+    dt = T / M;
+    dts(k) = dt;
+
+    [x, t, U] = crankNicolson1D(D, ffcn, TLfcn, TRfcn, uinitfcn, T, N, M);
+
+    u_exact = uanafcn(x, T);
+
+    % diskret 2-norm över inre punkter (2..N)
+    r       = U(2:N,end) - u_exact(2:N);
+    errs(k) = sqrt( (1/(N-1)) * sum(abs(r).^2) );
+end
+
+% uppmätt konvergensordning
+orders = NaN(size(Ns));
+for k = 2:length(Ns)
+    orders(k) = log(errs(k-1)/errs(k)) / log(dxs(k-1)/dxs(k));
+end
+
+fprintf('\nU4(e): konvergensstudie vid T = %.1f\n', T);
+fprintf('   N        dx          dt          fel(2-norm)    ordning\n');
+for k = 1:length(Ns)
+    if k == 1
+        ord_str = '   -';
+    else
+        ord_str = sprintf('%10.3f', orders(k));
+    end
+    fprintf('%4d   %9.4e  %9.4e  %13.4e  %s\n', Ns(k), dxs(k), dts(k), errs(k), ord_str);
+end
+
+%% U4(f)
+
+
+uanafcn  = @(x,t) sin(exp(t).*x);
+uinitfcn = @(x)   uanafcn(x,0);
+ffcn     = @(x,t) exp(t).*x.*cos(exp(t).*x) + exp(2*t).*sin(exp(t).*x);
+TLfcn    = @(t)   0;
+TRfcn    = @(t)   sin(exp(t));
+
+D     = 1;
+N     = 200;         
+dx    = 1/N;
+dt0   = 0.5 * dx;     
+Tvals = [1 2 4 8];    
+
+for m = 1:length(Tvals)
+    T  = Tvals(m);
+    M  = round(T / dt0);
+    dt = T / M;      
+
+    [x, t, U] = crankNicolson1D(D, ffcn, TLfcn, TRfcn, uinitfcn, T, N, M);
+    u_exact   = uanafcn(x, T);
+
+    figure
+    plot(x, u_exact, 'k--', x, U(:,end), 'b-');
+    legend('Exakt','Numerisk','Location','Best');
+    xlabel('x');
+    ylabel('u(x,t)');
+    title(sprintf('U4(f): t = %.1f  (dt = %.3e)', T, dt));
+    grid on
+end
